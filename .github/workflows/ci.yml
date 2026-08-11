@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: basira
+          POSTGRES_USER: basira
+          POSTGRES_PASSWORD: basira_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U basira -d basira"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://basira:basira_ci@localhost:5432/basira?schema=public
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: ci-secret-with-at-least-thirty-two-characters
+      REDIS_URL: redis://localhost:6379
+      STORAGE_ENDPOINT: http://localhost:9000
+      STORAGE_PUBLIC_ENDPOINT: http://localhost:9000
+      STORAGE_ANALYZER_ENDPOINT: http://localhost:9000
+      STORAGE_REGION: us-east-1
+      STORAGE_BUCKET: basira-ci
+      STORAGE_ACCESS_KEY_ID: ci-access
+      STORAGE_SECRET_ACCESS_KEY: ci-secret-key
+      ANALYZER_BACKEND: ai-sdk
+      AI_ANALYZER_URL: http://localhost:8020
+      PYTHON_ANALYZER_URL: http://localhost:8010
+      CALLBACK_BASE_URL: http://localhost:3000
+      WEB_TO_PYTHON_HMAC_KEYS: ci-web-to-python-key-change-me
+      PYTHON_TO_WEB_HMAC_KEYS: ci-python-to-web-key-change-me
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.17.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm db:deploy
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build

@@ -1,0 +1,435 @@
+generator client {
+  provider   = "prisma-client"
+  output     = "../lib/generated/prisma"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  TEACHER
+  ADMIN
+}
+
+enum AnalysisStatus {
+  DRAFT
+  READY
+  PROCESSING
+  REVIEW
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum AnalysisInputMode {
+  FORM
+  PDF
+}
+
+enum AssetStatus {
+  PENDING
+  UPLOADED
+  MAPPED
+  FAILED
+}
+
+enum QuestionType {
+  SHORT_ANSWER
+  MULTIPLE_CHOICE
+  INK
+}
+
+enum RunStatus {
+  QUEUED
+  PROCESSING
+  REVIEW
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum MasteryLevel {
+  MASTERED
+  PARTIAL
+  NOT_MASTERED
+  UNREADABLE
+}
+
+enum ReviewDecision {
+  ACCEPTED
+  EDITED
+  REPROCESS
+}
+
+enum PlanStatus {
+  DRAFT
+  APPROVED
+  ARCHIVED
+}
+
+model User {
+  id            String            @id @default(cuid())
+  name          String
+  email         String            @unique
+  emailVerified Boolean           @default(false)
+  image         String?
+  role          UserRole          @default(TEACHER)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  analyses      AnalysisSession[]
+  auditLogs     AuditLog[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model AnalysisSession {
+  id              String              @id @default(cuid())
+  formToken       String              @unique @default(cuid())
+  ownerId         String
+  title           String
+  subject         String
+  grade           String
+  lesson          String?
+  classroom       String
+  nafsAligned     Boolean             @default(false)
+  nafsDomain      String?
+  nafsFramework   String?
+  status          AnalysisStatus      @default(DRAFT)
+  inputMode       AnalysisInputMode   @default(FORM)
+  publishedAt     DateTime?
+  lockedAt        DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  owner           User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  objectives      LearningObjective[]
+  questions       Question[]
+  students        Student[]
+  assets          SubmissionAsset[]
+  runs            AnalysisRun[]
+  groups          StudentGroup[]
+  formSubmissions FormSubmission[]
+
+  @@index([ownerId, updatedAt])
+}
+
+model LearningObjective {
+  id        String          @id @default(cuid())
+  sessionId String
+  code      String
+  title     String
+  position  Int
+  session   AnalysisSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@unique([sessionId, code])
+  @@index([sessionId, position])
+}
+
+model Question {
+  id          String            @id @default(cuid())
+  sessionId   String
+  objectiveId String
+  type        QuestionType
+  prompt      String
+  answerKey   String
+  rubric      String?
+  choices     Json?
+  position    Int
+  session     AnalysisSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  objective   LearningObjective @relation(fields: [objectiveId], references: [id], onDelete: Restrict)
+  mappings    PageMapping[]
+  results     AnswerResult[]
+
+  @@index([sessionId, position])
+}
+
+model Student {
+  id             String            @id @default(cuid())
+  sessionId      String
+  code           String
+  name           String?
+  nameKey        String?
+  formToken      String            @unique @default(cuid())
+  session        AnalysisSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  assets         SubmissionAsset[]
+  mappings       PageMapping[]
+  results        AnswerResult[]
+  gapLinks       GapStudent[]
+  groups         GroupMember[]
+  formSubmission FormSubmission?
+
+  @@unique([sessionId, code])
+  @@unique([sessionId, nameKey])
+}
+
+model FormSubmission {
+  id          String          @id @default(cuid())
+  sessionId   String
+  studentId   String          @unique
+  payload     Json
+  submittedAt DateTime        @default(now())
+  session     AnalysisSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student     Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, submittedAt])
+}
+
+model SubmissionAsset {
+  id          String          @id @default(cuid())
+  sessionId   String
+  studentId   String?
+  objectKey   String          @unique
+  fileName    String
+  contentType String
+  size        Int
+  checksum    String?
+  status      AssetStatus     @default(PENDING)
+  uploadedAt  DateTime?
+  createdAt   DateTime        @default(now())
+  session     AnalysisSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student     Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  mappings    PageMapping[]
+
+  @@index([sessionId, status])
+}
+
+model PageMapping {
+  id         String          @id @default(cuid())
+  assetId    String
+  studentId  String
+  questionId String?
+  pageNumber Int
+  asset      SubmissionAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  student    Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  question   Question?       @relation(fields: [questionId], references: [id], onDelete: SetNull)
+
+  @@unique([assetId, pageNumber, questionId])
+}
+
+model AnalysisRun {
+  id             String          @id @default(cuid())
+  sessionId      String
+  version        Int
+  schemaVersion  String          @default("analysis-job.v1")
+  status         RunStatus       @default(QUEUED)
+  progress       Int             @default(0)
+  idempotencyKey String          @unique
+  analyzerJobId  String?
+  errorCode      String?
+  errorMessage   String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  session        AnalysisSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  results        AnswerResult[]
+  gaps           LearningGap[]
+  groups         StudentGroup[]
+  events         AnalysisEvent[]
+
+  @@unique([sessionId, version])
+  @@index([sessionId, createdAt])
+}
+
+model AnswerResult {
+  id              String          @id @default(cuid())
+  runId           String
+  studentId       String
+  questionId      String
+  extractedAnswer String
+  mastery         MasteryLevel
+  score           Float?
+  confidence      Float
+  needsReview     Boolean         @default(false)
+  decision        ReviewDecision?
+  teacherAnswer   String?
+  teacherNote     String?
+  reviewedAt      DateTime?
+  run             AnalysisRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  student         Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  question        Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, studentId, questionId])
+  @@index([runId, needsReview])
+}
+
+model LearningGap {
+  id            String       @id @default(cuid())
+  runId         String
+  slug          String
+  title         String
+  description   String
+  affectedCount Int
+  population    Int
+  confidence    Float
+  evidence      String
+  color         String
+  rank          Int
+  run           AnalysisRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  students      GapStudent[]
+
+  @@unique([runId, slug])
+  @@index([runId, rank])
+}
+
+model GapStudent {
+  gapId     String
+  studentId String
+  gap       LearningGap @relation(fields: [gapId], references: [id], onDelete: Cascade)
+  student   Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([gapId, studentId])
+}
+
+model StudentGroup {
+  id          String             @id @default(cuid())
+  sessionId   String
+  runId       String
+  key         String
+  label       String
+  title       String
+  description String
+  color       String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  session     AnalysisSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  run         AnalysisRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  members     GroupMember[]
+  plans       InterventionPlan[]
+
+  @@unique([runId, key])
+}
+
+model GroupMember {
+  groupId   String
+  studentId String
+  reason    String
+  movedBy   String?
+  updatedAt DateTime     @updatedAt
+  group     StudentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student   Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, studentId])
+  @@index([studentId])
+}
+
+model InterventionPlan {
+  id           String       @id @default(cuid())
+  groupId      String
+  version      Int
+  status       PlanStatus   @default(DRAFT)
+  objective    String
+  duration     String
+  teacherSteps Json
+  explanation  String
+  example      String
+  activity     String
+  practice     Json
+  exitTicket   Json
+  adaptations  Json
+  approvedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  group        StudentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, version])
+}
+
+model AnalysisEvent {
+  id        String      @id @default(cuid())
+  runId     String
+  type      String
+  payload   Json
+  createdAt DateTime    @default(now())
+  run       AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+}
+
+model OutboxEvent {
+  id          String    @id @default(cuid())
+  type        String
+  aggregateId String
+  payload     Json
+  attempts    Int       @default(0)
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([processedAt, createdAt])
+}
+
+model CallbackNonce {
+  nonce     String   @id
+  keyId     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+}

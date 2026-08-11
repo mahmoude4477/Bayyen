@@ -1,0 +1,13 @@
+.next/
+.netlify/
+node_modules/
+.pnpm-store/
+out/
+output/
+.env*
+!.env.example
+*.log
+*.tsbuildinfo
+tmp/
+test-results/
+hardcoded-scan.txt
