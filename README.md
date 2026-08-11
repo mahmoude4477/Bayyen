@@ -1,7 +1,10 @@
 <div align="center" dir="rtl">
-  <img src="public/bayyen-logo-white.png" alt="شعار بيّن" width="240" />
+  <a href="https://docs.google.com/file/d/1FfwwsZuO5wFZ737icPwInNU3py0EwjPg/preview">
+    <img src="public/bayyen-logo-white.png" alt="شعار بيّن — مشاهدة الفيديو التوضيحي" width="240" />
+  </a>
   <h1>بيّن</h1>
   <p><strong>من إجابة الطالب إلى قرار علاجي موثوق</strong></p>
+  <p><a href="https://docs.google.com/file/d/1FfwwsZuO5wFZ737icPwInNU3py0EwjPg/preview"><strong>▶ مشاهدة الفيديو التوضيحي</strong></a></p>
   <p><strong>30% مكتمل</strong> · 70% ضمن خارطة الطريق</p>
   <p><sub>آخر تحديث: 11 أغسطس 2026</sub></p>
   <p>
